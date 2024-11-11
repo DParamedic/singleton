@@ -9,10 +9,10 @@ from tqdm import tqdm
 
 DataFrame = TypeVar('pd.DataFrame')
 column = TypeVar('pd.df.column')
-array = TypeVar('np.array')
+arrayLike = TypeVar('np.array')
 rules = TypeVar('fuzz.ctrl.Rule')
 
-def mu_value(independent_var: int, sort_arr: array, term_value: tuple) -> tuple[int]:
+def mu_value(independent_var: int, sort_arr: arrayLike, term_value: tuple) -> tuple[int]:
     """
     #Параметры:
     independent_var -- значение переменной, для которой необходимо найти значение функции
@@ -23,13 +23,43 @@ def mu_value(independent_var: int, sort_arr: array, term_value: tuple) -> tuple[
     """
     return tuple(fuzz.interp_membership(sort_arr, term_value[i], independent_var) for i in range(len(term_value)))
 
-def body_func(data_frame: DataFrame, target_var: str, *independent_vars: str, print_pyplot: bool=False) -> array:
+def ruls_base(variables_list: list, term_arr, target_term_arr=None) -> arrayLike[arrayLike, arrayLike]:
+    '''
+    #Параметры:
+    variables_list -- список переменных.
+    term_arr -- список терм.
+    target_term_arr -- список альтернативных значений (например, для синглтона).
+
+    '''
+    stop_word: int = len(term_arr)**len(variables_list)
+    def rec(term_arr, stop_word: int, target_term_arr, res_arr=None):
+        len_term_arr = len(term_arr)
+        shape_res_arr = np.shape(res_arr)
+        print(len_term_arr, shape_res_arr)
+        if res_arr is None:
+            res_arr = np.array(np.array([
+                np.repeat(np.array([i for i in term_arr]), len_term_arr),
+                [i for i in term_arr]*len_term_arr
+                ]))
+            return rec(term_arr, stop_word, target_term_arr, res_arr)
+        elif shape_res_arr[1] == stop_word:
+            return res_arr
+        elif shape_res_arr[1]*len_term_arr == stop_word:
+            if target_term_arr is not None and len(target_term_arr) == len_term_arr:
+                term_arr = target_term_arr
+                res_arr = np.reshape(np.repeat(res_arr, len_term_arr), (shape_res_arr[0], shape_res_arr[1]*len_term_arr))
+                res_arr = np.reshape(np.append(res_arr, [i for i in term_arr]*len_term_arr**shape_res_arr[0]), (shape_res_arr[0]+1, shape_res_arr[1]*len_term_arr))
+                return rec(term_arr, stop_word, target_term_arr, res_arr)
+        else:
+            res_arr = np.reshape(np.repeat(res_arr, len_term_arr), (shape_res_arr[0], shape_res_arr[1]*len_term_arr))
+            res_arr = np.reshape(np.append(res_arr, [i for i in term_arr]*len_term_arr**shape_res_arr[0]), (shape_res_arr[0]+1, shape_res_arr[1]*len_term_arr))
+            return rec(term_arr, stop_word, target_term_arr, res_arr)
+    return np.transpose(rec(term_arr, stop_word, target_term_arr))
+
+def body_func(data_frame: DataFrame, target_var: str, *independent_vars: str, print_pyplot: bool=False) -> arrayLike:
     """
-    У входных данных (независимых переменных) ограничение по количеству, оно должно равняться трем, иначе генерируется ошибка.
-    Причина генерации ошибки -- формирование базы данных.
+
     """
-    if len(independent_vars) != 3:
-        raise ValueError('Необходимо три нецелевых параметра для *independent_vars.')
     (name_list := [i for i in independent_vars]).append(target_var)
     statistic_dict = {}
     arr_sort_dict = {}
@@ -48,7 +78,7 @@ def body_func(data_frame: DataFrame, target_var: str, *independent_vars: str, pr
             fuzz.trimf(arr_sort_dict[name], [statistic_dict[name][1], statistic_dict[name][2], statistic_dict[name][2]])
         )
     # Визуализация функций принадлежности
-    if print_pyplot: # Можно вставить условие визуализации
+    if print_pyplot: 
         fig, axes = plt.subplots(1, 4, figsize=(24, 5))
         for name in name_list:
             axes[name_list.index(name)].plot(arr_sort_dict[name], term_build_dict[name][0], label='Low', color='blue')
@@ -62,36 +92,9 @@ def body_func(data_frame: DataFrame, target_var: str, *independent_vars: str, pr
         plt.show()
         return
     
-    # База правил
-    # Узкое горлышко, потому что работает только с тремя входящеми переменными. По хорошему надо переписать.
-    
     # Определение диапазонов на основе фактических данных
     # Не понимаю, как работает
     # for name in name_list[0:3]:
     #     range_dict[name] = ctrl.Antecedent(np.linspace(statistic_dict[name][0], statistic_dict[name][2], 100), name)
     # range_dict[name_list[-1]] = ctrl.Consequent((statistic_dict[name_list[-1]][0], statistic_dict[name_list[-1]][2] + 0.1, 0.1), name_list[-1])
 
-    for name in name_list:
-        ruls_base[name] = 'low', 'medium', 'high'
-
-    # for var, terms in zip(variables, intervals_data.values()): # [(range_dict[name], ruls_base[name]), ...]
-    #     intervals = np.linspace(var.universe.min(), var.universe.max(), num_intervals + 1)
-    #     for term, (start, end) in zip(terms, zip(intervals, intervals[1:])):
-    #         var[term] = fuzz.trimf(var.universe, [start, (start + end) / 2, end])
-
-    def rec_ruls(ruls_base: dict, name_list: list) -> tuple[array, rules]:
-        if len(name_list) == 1:
-            rule = ctrl.Rule(
-                range_dict[name_list[0]][x1] & range_dict[name_list[1]][x2] & range_dict[name_list[2]][x3],
-                range_dict[name_list[-1]][y]
-            )
-    rules = []
-    for x1 in ruls_base[name_list[0]]:
-        for x2 in ruls_base[name_list[1]]:
-            for x3 in ruls_base[name_list[2]]:
-                for y in ruls_base[name_list[-1]]:
-                    rule = ctrl.Rule(
-                        range_dict[name_list[0]][x1] & range_dict[name_list[1]][x2] & range_dict[name_list[2]][x3],
-                        range_dict[name_list[-1]][y]
-                    )
-                    rules.append(rule)
