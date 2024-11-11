@@ -23,19 +23,18 @@ def mu_value(independent_var: int, sort_arr: arrayLike, term_value: tuple) -> tu
     """
     return tuple(fuzz.interp_membership(sort_arr, term_value[i], independent_var) for i in range(len(term_value)))
 
-def ruls_base(variables_list: list, term_arr, target_term_arr=None) -> arrayLike[arrayLike, arrayLike]:
+def ruls_base(variables_list: list, term_arr, target_term_arr=None) -> arrayLike:
     '''
     #Параметры:
     variables_list -- список переменных.
     term_arr -- список терм.
-    target_term_arr -- список альтернативных значений (например, для синглтона).
+    target_term_arr -- список альтернативных значений для терм(например, для синглтона).
 
     '''
     stop_word: int = len(term_arr)**len(variables_list)
     def rec(term_arr, stop_word: int, target_term_arr, res_arr=None):
         len_term_arr = len(term_arr)
         shape_res_arr = np.shape(res_arr)
-        print(len_term_arr, shape_res_arr)
         if res_arr is None:
             res_arr = np.array(np.array([
                 np.repeat(np.array([i for i in term_arr]), len_term_arr),
@@ -64,8 +63,6 @@ def body_func(data_frame: DataFrame, target_var: str, *independent_vars: str, pr
     statistic_dict = {}
     arr_sort_dict = {}
     term_build_dict = {}
-    ruls_base = {}
-    range_dict = {}
     for name in name_list:
         statistic_dict[name] = (data_frame[name].min(), data_frame[name].mean(), data_frame[name].max())
     for name in name_list:
@@ -92,9 +89,6 @@ def body_func(data_frame: DataFrame, target_var: str, *independent_vars: str, pr
         plt.show()
         return
     
-    # Определение диапазонов на основе фактических данных
-    # Не понимаю, как работает
-    # for name in name_list[0:3]:
-    #     range_dict[name] = ctrl.Antecedent(np.linspace(statistic_dict[name][0], statistic_dict[name][2], 100), name)
-    # range_dict[name_list[-1]] = ctrl.Consequent((statistic_dict[name_list[-1]][0], statistic_dict[name_list[-1]][2] + 0.1, 0.1), name_list[-1])
-
+    term_list = ['low', 'medium', 'high']
+    base_ruls = ruls_base(name_list, term_list, [statistic_dict[target_var][0], statistic_dict[target_var][1], statistic_dict[target_var][2]])
+    
